@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="'Vote - ' + ${election.title}">Vote - Secure QR Voting System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="bi bi-shield-check"></i> Secure QR Voting
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/elections">
+                    <i class="bi bi-arrow-left"></i> Back to Elections
+                </a>
+                <a class="nav-link" href="/logout">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow">
+                    <div class="card-header bg-success text-white">
+                        <h3 class="mb-0">
+                            <i class="bi bi-ballot-fill"></i> Cast Your Vote
+                        </h3>
+                        <p class="mb-0" th:text="${election.title}"></p>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info" role="alert">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Important:</strong> Once you submit your vote, it cannot be changed. 
+                            Please review your selection carefully before confirming.
+                        </div>
+                        
+                        <div th:if="${error}" class="alert alert-danger" role="alert">
+                            <i class="bi bi-exclamation-triangle"></i> <span th:text="${error}"></span>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h5>Election Details</h5>
+                            <p th:text="${election.description}"></p>
+                            <small class="text-muted">
+                                <i class="bi bi-calendar-event"></i> 
+                                Voting ends: <span th:text="${#temporals.format(election.endTime, 'MMM dd, yyyy HH:mm')}"></span>
+                            </small>
+                        </div>
+                        
+                        <form th:action="@{/vote/{id}(id=${election.electionId})}" method="post" id="voteForm">
+                            <div class="mb-4">
+                                <h5>Select Your Candidate</h5>
+                                <div class="candidate-list">
+                                    <div class="card mb-3" th:each="candidate : ${election.candidates}">
+                                        <div class="card-body">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" 
+                                                       th:id="'candidate_' + ${candidate.candidateId}"
+                                                       name="candidateId" 
+                                                       th:value="${candidate.candidateId}" 
+                                                       required>
+                                                <label class="form-check-label w-100" 
+                                                       th:for="'candidate_' + ${candidate.candidateId}">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <h6 class="mb-1" th:text="${candidate.name}"></h6>
+                                                            <p class="mb-0 text-muted" th:text="${candidate.description}"></p>
+                                                        </div>
+                                                        <i class="bi bi-circle text-muted candidate-icon"></i>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="confirmVote" required>
+                                    <label class="form-check-label" for="confirmVote">
+                                        I confirm that I have reviewed my selection and understand that this vote cannot be changed once submitted.
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-success btn-lg" onclick="confirmVote()">
+                                    <i class="bi bi-check-circle"></i> Submit Vote
+                                </button>
+                                <a href="/elections" class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle"></i> Cancel
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Vote Confirmation Modal -->
+    <div class="modal fade" id="confirmVoteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle"></i> Confirm Your Vote
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Election:</strong> <span th:text="${election.title}"></span></p>
+                    <p><strong>Your Selection:</strong> <span id="selectedCandidate"></span></p>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Warning:</strong> This action cannot be undone. Are you sure you want to submit this vote?
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-arrow-left"></i> Go Back
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="submitVote()">
+                        <i class="bi bi-check-circle"></i> Yes, Submit Vote
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Update radio button icons
+        document.querySelectorAll('input[name="candidateId"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                // Reset all icons
+                document.querySelectorAll('.candidate-icon').forEach(icon => {
+                    icon.className = 'bi bi-circle text-muted candidate-icon';
+                });
+                
+                // Update selected icon
+                if (this.checked) {
+                    const icon = this.closest('.card-body').querySelector('.candidate-icon');
+                    icon.className = 'bi bi-check-circle-fill text-success candidate-icon';
+                }
+            });
+        });
+        
+        function confirmVote() {
+            const selectedRadio = document.querySelector('input[name="candidateId"]:checked');
+            const confirmCheckbox = document.getElementById('confirmVote');
+            
+            if (!selectedRadio) {
+                alert('Please select a candidate before submitting your vote.');
+                return;
+            }
+            
+            if (!confirmCheckbox.checked) {
+                alert('Please confirm that you have reviewed your selection.');
+                return;
+            }
+            
+            // Get selected candidate name
+            const selectedLabel = document.querySelector(`label[for="${selectedRadio.id}"] h6`);
+            document.getElementById('selectedCandidate').textContent = selectedLabel.textContent;
+            
+            // Show confirmation modal
+            const modal = new bootstrap.Modal(document.getElementById('confirmVoteModal'));
+            modal.show();
+        }
+        
+        function submitVote() {
+            document.getElementById('voteForm').submit();
+        }
+    </script>
+</body>
+</html>

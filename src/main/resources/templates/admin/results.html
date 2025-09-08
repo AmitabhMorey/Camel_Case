@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Election Results - Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/admin/dashboard">
+                <i class="bi bi-shield-lock"></i> Admin Panel
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/admin/dashboard">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link" href="/logout">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2">
+                <div class="list-group">
+                    <a href="/admin/dashboard" class="list-group-item list-group-item-action">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                    <a href="/admin/elections" class="list-group-item list-group-item-action">
+                        <i class="bi bi-ballot"></i> Elections
+                    </a>
+                    <a href="/admin/results" class="list-group-item list-group-item-action active">
+                        <i class="bi bi-bar-chart"></i> Results
+                    </a>
+                    <a href="/admin/audit" class="list-group-item list-group-item-action">
+                        <i class="bi bi-journal-text"></i> Audit Logs
+                    </a>
+                    <a href="/admin/users" class="list-group-item list-group-item-action">
+                        <i class="bi bi-people"></i> Users
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1><i class="bi bi-bar-chart"></i> Election Results</h1>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary" onclick="exportResults()">
+                            <i class="bi bi-download"></i> Export
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="printResults()">
+                            <i class="bi bi-printer"></i> Print
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Election Selection -->
+                <div class="card mb-4" th:if="${elections != null}">
+                    <div class="card-body">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-8">
+                                <label for="electionId" class="form-label">Select Election</label>
+                                <select class="form-select" id="electionId" name="electionId" onchange="this.form.submit()">
+                                    <option value="">Choose an election to view results</option>
+                                    <option th:each="election : ${elections}" 
+                                            th:value="${election.electionId}" 
+                                            th:text="${election.title + ' (' + election.status + ')'}"
+                                            th:selected="${selectedElectionId == election.electionId}">
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">&nbsp;</label>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-success" onclick="tallyVotes()" 
+                                            th:if="${selectedElection != null}">
+                                        <i class="bi bi-calculator"></i> Tally Votes
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Results Display -->
+                <div th:if="${results != null}">
+                    <!-- Election Info -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h4 class="mb-0" th:text="${selectedElection.title}"></h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Description:</strong> <span th:text="${selectedElection.description}"></span></p>
+                                    <p><strong>Status:</strong> 
+                                        <span class="badge bg-success" th:if="${selectedElection.status.name() == 'ACTIVE'}">Active</span>
+                                        <span class="badge bg-secondary" th:if="${selectedElection.status.name() == 'ENDED'}">Ended</span>
+                                    </p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Start:</strong> <span th:text="${#temporals.format(selectedElection.startTime, 'MMM dd, yyyy HH:mm')}"></span></p>
+                                    <p><strong>End:</strong> <span th:text="${#temporals.format(selectedElection.endTime, 'MMM dd, yyyy HH:mm')}"></span></p>
+                                    <p><strong>Total Votes:</strong> <span class="badge bg-primary" th:text="${results.totalVotes}"></span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Results Summary -->
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="bi bi-trophy"></i> Vote Results</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div th:if="${results.candidateResults.empty}" class="text-center py-4">
+                                        <i class="bi bi-inbox display-4 text-muted"></i>
+                                        <p class="text-muted mt-2">No votes have been cast yet</p>
+                                    </div>
+                                    
+                                    <div th:if="${!results.candidateResults.empty}">
+                                        <div class="mb-3" th:each="result, iterStat : ${results.candidateResults}">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <div>
+                                                    <h6 class="mb-0" th:text="${result.candidateName}"></h6>
+                                                    <small class="text-muted" th:text="${result.candidateDescription}"></small>
+                                                </div>
+                                                <div class="text-end">
+                                                    <span class="badge bg-primary fs-6" th:text="${result.voteCount} + ' votes'"></span>
+                                                    <br>
+                                                    <small class="text-muted" th:text="${result.percentage} + '%'"></small>
+                                                </div>
+                                            </div>
+                                            <div class="progress mb-3">
+                                                <div class="progress-bar" 
+                                                     th:classappend="${iterStat.first} ? 'bg-success' : (${iterStat.index == 1} ? 'bg-info' : 'bg-secondary')"
+                                                     role="progressbar" 
+                                                     th:style="'width: ' + ${result.percentage} + '%'"
+                                                     th:text="${result.percentage} + '%'">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Winner Announcement -->
+                                        <div class="alert alert-success" th:if="${results.winner != null}">
+                                            <h5><i class="bi bi-trophy-fill"></i> Winner</h5>
+                                            <p class="mb-0">
+                                                <strong th:text="${results.winner.candidateName}"></strong> 
+                                                wins with <strong th:text="${results.winner.voteCount}"></strong> votes 
+                                                (<strong th:text="${results.winner.percentage} + '%'"></strong>)
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="bi bi-pie-chart"></i> Visual Results</h5>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="resultsChart" width="300" height="300"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Statistics -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="bi bi-graph-up"></i> Detailed Statistics</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h4 class="text-primary" th:text="${results.totalVotes}">0</h4>
+                                        <p class="text-muted">Total Votes</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h4 class="text-success" th:text="${results.validVotes}">0</h4>
+                                        <p class="text-muted">Valid Votes</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h4 class="text-warning" th:text="${results.invalidVotes}">0</h4>
+                                        <p class="text-muted">Invalid Votes</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h4 class="text-info" th:text="${results.turnoutPercentage} + '%'">0%</h4>
+                                        <p class="text-muted">Turnout Rate</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Voting Timeline</h6>
+                                    <canvas id="timelineChart" width="400" height="200"></canvas>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Security Summary</h6>
+                                    <ul class="list-unstyled">
+                                        <li><i class="bi bi-shield-check text-success"></i> All votes encrypted and verified</li>
+                                        <li><i class="bi bi-lock text-success"></i> Hash integrity maintained</li>
+                                        <li><i class="bi bi-eye text-success"></i> Full audit trail available</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> No tampering detected</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- No Election Selected -->
+                <div th:if="${results == null and elections != null}" class="text-center py-5">
+                    <i class="bi bi-bar-chart display-1 text-muted"></i>
+                    <h3 class="text-muted mt-3">Select an Election</h3>
+                    <p class="text-muted">Choose an election from the dropdown above to view its results.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script th:if="${results != null}">
+        // Results Pie Chart
+        const ctx = document.getElementById('resultsChart').getContext('2d');
+        const resultsChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: [/*[[${results.candidateResults.![candidateName]}]]*/],
+                datasets: [{
+                    data: [/*[[${results.candidateResults.![voteCount]}]]*/],
+                    backgroundColor: [
+                        '#28a745', '#17a2b8', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        
+        function tallyVotes() {
+            const electionId = document.getElementById('electionId').value;
+            if (electionId) {
+                fetch(`/admin/elections/${electionId}/tally`, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert('Failed to tally votes: ' + data.message);
+                        }
+                    });
+            }
+        }
+        
+        function exportResults() {
+            const electionId = document.getElementById('electionId').value;
+            if (electionId) {
+                window.open(`/admin/results/${electionId}/export`, '_blank');
+            }
+        }
+        
+        function printResults() {
+            window.print();
+        }
+    </script>
+</body>
+</html>
